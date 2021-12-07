@@ -3,7 +3,10 @@
 #include <stdlib.h>
 
 
-static PyObject* SpamError;
+static PyObject* spam_frame(PyThreadState* ts, PyFrameObject* f, int throwflag) {
+    // Do stuff...
+    return _PyEval_EvalFrameDefault(ts, f, throwflag);
+}
 
 static PyObject* spam_system(PyObject* self, PyObject* args) {
     const char* command;
@@ -39,22 +42,37 @@ static PyObject* spam_check_system(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
+static PyInterpreterState* inter() {
+    return PyInterpreterState_Main();
+}
+
+static PyObject* spam_enable(PyObject* self, PyObject* args) {
+    auto prev = _PyInterpreterState_GetEvalFrameFunc(inter());
+    _PyInterpreterState_SetEvalFrameFunc(inter(), spam_frame);
+    if (prev == spam_frame) {
+        Py_RETURN_FALSE;
+    }
+    Py_RETURN_TRUE;
+}
+
+static PyObject* spam_disable(PyObject* self, PyObject* args) {
+    auto prev = _PyInterpreterState_GetEvalFrameFunc(inter());
+    _PyInterpreterState_SetEvalFrameFunc(inter(), _PyEval_EvalFrameDefault);
+    if (prev == PyJit_EvalFrame) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
 static PyMethodDef SpamMethods[] = {
-    {
-        "system",
-        spam_system,
-        METH_VARARGS,
-        "Execute a system command and return its exit status.\n\n"
-        "If the command cannot be executed, return -1.",
-    },
-    {
-        "check_system",
-        spam_check_system,
-        METH_VARARGS,
-        "Execute a system command.\n\n"
-        "If the command cannot be executed or returns a non-zero exit status, "
-        "raise Error.",
-    },
+        {"enable",
+         spam_enable,
+         METH_NOARGS,
+         "Enable."},
+        {"disable",
+         spam_disable,
+         METH_NOARGS,
+         "Disable."},
     {NULL, NULL, 0, NULL},  // sentinel
 };
 
@@ -74,9 +92,6 @@ PyMODINIT_FUNC PyInit_spam() {
     if (module == NULL) {
         return NULL;
     }
-    SpamError = PyErr_NewException("spam.Error", NULL, NULL);
-    Py_INCREF(SpamError);
-    PyModule_AddObject(module, "Error", SpamError);
     return module;
 }
 #else
@@ -88,8 +103,5 @@ PyMODINIT_FUNC initspam() {
     if (module == NULL) {
         return;
     }
-    SpamError = PyErr_NewException((char*)"spam.Error", NULL, NULL);
-    Py_INCREF(SpamError);
-    PyModule_AddObject(module, "Error", SpamError);
 }
 #endif
